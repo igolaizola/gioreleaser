@@ -1,0 +1,124 @@
+name: goreleaser
+
+on:
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: write
+
+jobs:
+  release-macos:
+    needs: goreleaser
+    runs-on: macos-12
+    steps:
+      - id: get-tag
+        run: |
+          TAG=${{ github.ref_name }}
+          echo "VERSION=${TAG#v}" >> $GITHUB_OUTPUT
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - run: git fetch --force --tags
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '>=1.20.1'
+          cache: true
+      #- name: install gogio tool
+      #  run: |
+      #    go install gioui.org/cmd/gogio@latest
+      #- name: Build the binary with gogio
+      #  run: |
+      #    gogio -target=macos -o gioreleaser.app -x .
+      #    ls -la
+      - name: Build for macos arm64
+        run: CGO_CFLAGS_ALLOW="-DPARAMS=sphincs-shake-256f" CGO_ENABLED=1 GOOS="darwin" GOARCH="arm64" go build -trimpath -ldflags=-buildid= -tags dynamic -o gioreleaser_arm64
+      - name: Build for macos amd64
+        run: CGO_CFLAGS_ALLOW="-DPARAMS=sphincs-shake-256f" CGO_ENABLED=1 GOOS="darwin" GOARCH="amd64" go build -trimpath -ldflags=-buildid= -tags dynamic -o gioreleaser_amd64
+      - name: Zip
+        run: |
+          zip -r gioreleaser_darwin_arm64.zip gioreleaser_arm64 README.md LICENSE
+          zip -r gioreleaser_darwin_amd64.zip gioreleaser_amd64 README.md LICENSE
+      - name: Upload to the release arm64
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: gioreleaser_darwin_arm64.zip
+          asset_name: "gioreleaser_${{steps.get-tag.outputs.VERSION}}_darwin_arm64.zip"
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload to the release amd64
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: gioreleaser_darwin_amd64.zip
+          asset_name: "gioreleaser_${{steps.get-tag.outputs.VERSION}}_darwin_amd64.zip"
+          tag: ${{ github.ref }}
+          overwrite: true
+  release-linux:
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    steps:
+      - id: get-tag
+        run: |
+          TAG=${{ github.ref_name }}
+          echo "VERSION=${TAG#v}" >> $GITHUB_OUTPUT
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - run: git fetch --force --tags
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '>=1.20.1'
+          cache: true
+      - name: Libraries for gio
+        run: |
+          sudo apt update
+          sudo apt install gcc pkg-config libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev libffi-dev libxcursor-dev libvulkan-dev
+      - name: Build for linux arm64
+        run: GOOS="linux" GOARCH="arm64" go build -trimpath -ldflags="${ldflags}" -o gioreleaser_arm64
+      - name: Build for linux amd64
+        run: GOOS="linux" GOARCH="amd64" go build -trimpath -ldflags="${ldflags}" -o gioreleaser_amd64
+      - name: Zip
+        run: |
+          zip -r gioreleaser_linux_arm64.zip gioreleaser_arm64 README.md LICENSE
+          zip -r gioreleaser_linux_amd64.zip gioreleaser_amd64 README.md LICENSE
+      - name: Upload to the release arm64
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: gioreleaser_linux_arm64.zip
+          asset_name: "gioreleaser_${{steps.get-tag.outputs.VERSION}}_linux_arm64.zip"
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload to the release amd64
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: gioreleaser_linux_amd64.zip
+          asset_name: "gioreleaser_${{steps.get-tag.outputs.VERSION}}_linux_amd64.zip"
+          tag: ${{ github.ref }}
+          overwrite: true
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - run: git fetch --force --tags
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '>=1.20.1'
+          cache: true
+      - name: Libraries for gio
+        run: |
+          sudo apt update
+          sudo apt install gcc pkg-config libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev libffi-dev libxcursor-dev libvulkan-dev
+      - uses: goreleaser/goreleaser-action@v4
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

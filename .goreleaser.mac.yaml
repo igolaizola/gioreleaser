@@ -1,0 +1,8 @@
+builds:
+  - id: gioreleaser-mac
+    binary: gioreleaser
+    main: ./main.go
+    goarch:
+      - amd64
+    goos:
+      - darwin
